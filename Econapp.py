@@ -1,11 +1,7 @@
-
-
 import pandas as pd
 import numpy as np
+import streamlit as st
 import plotly.express as px
-import dash
-import dash_bootstrap_components as dbc
-from dash import dcc, html, Input, Output
 from sklearn.ensemble import RandomForestRegressor
 
 # =====================
@@ -33,7 +29,7 @@ df = pd.DataFrame(data)
 
 # Add realistic relationships
 df['GDP_Growth'] = (
-    df['GDP_Growth'] 
+    df['GDP_Growth']
     + 0.12 * df['Tech_Investment']
     + 0.08 * df['Education_Spending']
     + 0.05 * df['Environmental_Protection']
@@ -65,168 +61,88 @@ model = RandomForestRegressor(n_estimators=100, random_state=42)
 model.fit(X, y)
 
 # =====================
-# 3. DASH APP
+# 3. STREAMLIT APP
 # =====================
-app = dash.Dash(__name__, external_stylesheets=[dbc.themes.CERULEAN])
+st.set_page_config(page_title="EconAI Simulator", layout="wide")
+st.title("🌍 Global Economic Prosperity Simulator")
+st.caption("Done by Ronak Baniabbasi | May 5, 2025")
 
-app.layout = dbc.Container([
-    dbc.Row(dbc.Col(html.H1("Global Economic Prosperity Simulator"), className="text-center my-4")),
-    
-    dbc.Row(
-        dbc.Col(
-            html.Div(
-                "Done By Ronak Baniabbasi | May 5, 2025",
-                style={
-                    'textAlign': 'center',
-                    'color': 'gray',
-                    'marginTop': '30px',
-                    'fontSize': '0.9rem'
-                }
-            ),
-            width=12
-        )
-    ),
-    
-    dbc.Row([
-        dbc.Col([
-            html.Label("Select Country:"),
-            dcc.Dropdown(id='country', options=[{'label':c, 'value':c} for c in countries], value='China')
-        ], md=4),
-        dbc.Col([
-            html.Label("Projection Years:"),
-            dcc.Slider(id='years', min=1, max=10, value=5, marks={i: str(i) for i in range(1, 11)})
-        ], md=8)
-    ]),
-    
-    
-    dbc.Tabs([
-        dbc.Tab(label="Traditional Factors", children=[
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Technology Investment Change (%):"),
-                    dcc.Slider(id='tech', min=-10, max=50, value=0)
-                ]),
-                dbc.Col([
-                    html.Label("Education Spending Change (%):"),
-                    dcc.Slider(id='edu', min=-10, max=30, value=0)
-                ])
-            ]),
-            dbc.Row(dbc.Col([
-                html.Label("Environmental Protection Change (%):"),
-                dcc.Slider(id='env', min=-20, max=40, value=0)
-            ]))
-        ]),
-        
-        dbc.Tab(label="Modern Factors", children=[
-            dbc.Row([
-                dbc.Col([
-                    html.Label("Urbanization Rate Change (%):"),
-                    dcc.Slider(id='urban', min=-5, max=25, value=0)
-                ]),
-                dbc.Col([
-                    html.Label("Globalization (Trade Openness) Change (%):"),
-                    dcc.Slider(id='global', min=-30, max=40, value=0)
-                ])
-            ]),
-            dbc.Row(dbc.Col([
-                html.Label("Individualism Index Change (%):"),
-                dcc.Slider(id='individual', min=-10, max=20, value=0)
-            ]))
-        ])
-    ], className="my-4"),
-    
-    dbc.Card([
-        dbc.CardHeader("Simulation Results", className="h4"),
-        dbc.CardBody([
-            dbc.Row([
-                dbc.Col(html.Div(id='gdp-impact', className="h3 text-center")),
-                dbc.Col(html.Div(id='factor-analysis'))
-            ]),
-            dcc.Graph(id='importance-plot')
-        ])
-    ]),
-    
-    dbc.Row([
-        dbc.Col(dcc.Graph(id='country-comparison'), width=8),
-        dbc.Col(dcc.Graph(id='factor-tradeoff'), width=4)
-    ], className="mt-4")
-])
+# Sidebar inputs
+st.sidebar.header("Simulation Settings")
+country = st.sidebar.selectbox("Select Country:", countries, index=1)
+years = st.sidebar.slider("Projection Years:", 1, 10, 5)
 
+st.sidebar.markdown("### Traditional Factors")
+tech = st.sidebar.slider("Technology Investment Change (%)", -10, 50, 0)
+edu = st.sidebar.slider("Education Spending Change (%)", -10, 30, 0)
+env = st.sidebar.slider("Environmental Protection Change (%)", -20, 40, 0)
 
-@app.callback(
-    [Output('gdp-impact', 'children'),
-     Output('factor-analysis', 'children'),
-     Output('importance-plot', 'figure'),
-     Output('country-comparison', 'figure'),
-     Output('factor-tradeoff', 'figure')],
-    [Input('country', 'value'),
-     Input('tech', 'value'),
-     Input('edu', 'value'),
-     Input('env', 'value'),
-     Input('urban', 'value'),
-     Input('global', 'value'),
-     Input('individual', 'value'),
-     Input('years', 'value')]
+st.sidebar.markdown("### Modern Factors")
+urban = st.sidebar.slider("Urbanization Rate Change (%)", -5, 25, 0)
+global_ = st.sidebar.slider("Globalization (Trade Openness) Change (%)", -30, 40, 0)
+individual = st.sidebar.slider("Individualism Index Change (%)", -10, 20, 0)
+
+# =====================
+# 4. SIMULATION
+# =====================
+scale = 1 + (years / 10)
+inputs = {
+    'Tech_Investment': tech * scale,
+    'Education_Spending': edu * scale,
+    'Environmental_Protection': env * scale,
+    'Urbanization_Rate': urban * scale,
+    'Trade_Openness': global_ * scale,
+    'Individualism_Index': individual * scale,
+    'Year': 2023 + years
+}
+
+input_df = pd.DataFrame([inputs])
+input_df = pd.get_dummies(input_df).reindex(columns=X.columns, fill_value=0)
+gdp_change = model.predict(input_df)[0] - df[df['Country'] == country]['GDP_Growth'].mean()
+
+# =====================
+# 5. OUTPUT
+# =====================
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader(f"📈 Projected GDP Change in {years} Years for {country}:")
+    st.markdown(
+        f"<h2 style='color:{'green' if gdp_change > 0 else 'red'}'>{gdp_change:.2f}%</h2>",
+        unsafe_allow_html=True
+    )
+
+with col2:
+    st.subheader("🔎 Factor Changes")
+    st.write(f"- Technology: {tech}%")
+    st.write(f"- Education: {edu}%")
+    st.write(f"- Environment: {env}%")
+    st.write(f"- Urbanization: {urban}%")
+    st.write(f"- Globalization: {global_}%")
+    st.write(f"- Individualism: {individual}%")
+
+# Feature importance
+importance = pd.DataFrame({'Factor': X.columns, 'Importance': model.feature_importances_})
+importance_fig = px.bar(importance, x='Factor', y='Importance', title='Factor Importance for GDP Growth')
+st.plotly_chart(importance_fig, use_container_width=True)
+
+# Country comparison
+country_comparison = px.line_polar(
+    df.groupby('Country').mean().reset_index(),
+    r='GDP_Growth',
+    theta='Country',
+    title='GDP Growth Comparison'
 )
-def update_dashboard(country, tech, edu, env, urban, global_, individual, years):
-    # Scale policy impacts by time horizon
-    scale = 1 + (years / 10)
-    inputs = {
-        'Tech_Investment': tech * scale,
-        'Education_Spending': edu * scale,
-        'Environmental_Protection': env * scale,
-        'Urbanization_Rate': urban * scale,
-        'Trade_Openness': global_ * scale,
-        'Individualism_Index': individual * scale,
-        'Year': 2023 + years
-    }
-    
-    # Predict GDP impact
-    input_df = pd.DataFrame([inputs])
-    input_df = pd.get_dummies(input_df).reindex(columns=X.columns, fill_value=0)
-    gdp_change = model.predict(input_df)[0] - df[df['Country'] == country]['GDP_Growth'].mean()
-    
-    # Create outputs
-    gdp_result = html.Div([
-        html.H4(f"Projected GDP Change in {years} Years:"),
-        html.H2(f"{gdp_change:.2f}%", style={'color': 'green' if gdp_change > 0 else 'red'})
-    ])
-    
-    factor_analysis = html.Ul([
-        html.Li(f"Technology: {tech}%"),
-        html.Li(f"Education: {edu}%"),
-        html.Li(f"Environment: {env}%"),
-        html.Li(f"Urbanization: {urban}%"),
-        html.Li(f"Globalization: {global_}%"),
-        html.Li(f"Individualism: {individual}%")
-    ])
-    
-    # Visualizations
-    importance = pd.DataFrame({'Factor': X.columns, 'Importance': model.feature_importances_})
-    importance_fig = px.bar(importance, x='Factor', y='Importance', title='Factor Importance for GDP Growth')
-    
-    country_comparison = px.line_polar(
-        df.groupby('Country').mean().reset_index(),
-        r='GDP_Growth',
-        theta='Country',
-        title='GDP Growth Comparison'
-    )
-    
-    tradeoff_fig = px.scatter(
-        df,
-        x='Individualism_Index',
-        y='Environmental_Protection',
-        color='GDP_Growth',
-        hover_name='Country',
-        title='Individualism vs Environmental Protection Trade-offs'
-    )
-    
-    return gdp_result, factor_analysis, importance_fig, country_comparison, tradeoff_fig
+st.plotly_chart(country_comparison, use_container_width=True)
 
+# Trade-offs
+tradeoff_fig = px.scatter(
+    df,
+    x='Individualism_Index',
+    y='Environmental_Protection',
+    color='GDP_Growth',
+    hover_name='Country',
+    title='Individualism vs Environmental Protection Trade-offs'
+)
+st.plotly_chart(tradeoff_fig, use_container_width=True)
 
-    # Your name and date added here
-    
-
-
-if __name__ == '__main__':
-    app.run( port=8000)
